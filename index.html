@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>MRKT Radar — Telegram Native TMA</title>
+  <title>MRKT Radar — Telegram Mini App</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
   <style>
     :root {
@@ -32,43 +33,51 @@
       font-variant-numeric: tabular-nums;
     }
 
-    /* iOS Segmented Control Active State */
     .segmented-item.active {
       background-color: #3a3a3c;
       color: #ffffff;
       font-weight: 600;
     }
+
+    /* Pulse dot */
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+    .live-dot {
+      animation: pulse-dot 1.8s ease-in-out infinite;
+    }
   </style>
 </head>
 <body class="bg-black text-white min-h-screen flex justify-center selection:bg-blue-600/30">
 
-  <!-- Main TMA Container (Safe Area Mobile Dimensions) -->
   <div class="w-full max-w-[430px] min-h-screen flex flex-col justify-between bg-black relative">
 
-    <!-- Top Native Navigation Area -->
+    <!-- Top Sticky Header -->
     <header class="sticky top-0 z-30 bg-black/85 backdrop-blur-xl border-b border-white/[0.06] px-4 pt-3 pb-2.5 space-y-3">
       
-      <!-- Native TMA Header Bar -->
       <div class="flex items-center justify-between">
         <div>
           <div class="flex items-center gap-1.5">
             <h1 class="text-[17px] font-semibold tracking-tight text-white">MRKT Radar</h1>
-            <span class="inline-block w-1.5 h-1.5 rounded-full bg-[#30d158]"></span>
+            <span id="scannerStatusDot" class="live-dot inline-block w-2 h-2 rounded-full bg-[#30d158]"></span>
           </div>
-          <p class="text-[12px] text-[#8e8e93] font-tabular">Пинг: 0.4с • Мониторинг активен</p>
+          <p id="headerSubtitle" class="text-[12px] text-[#8e8e93] font-tabular">Пинг: 0.3с • Поиск спредов</p>
         </div>
 
-        <!-- Profit Summary Badge (Subtle Telegram Style) -->
         <div class="bg-[#1c1c1e] border border-white/[0.08] px-2.5 py-1 rounded-lg text-right">
-          <span class="text-[10px] text-[#8e8e93] block uppercase tracking-wider font-semibold">Спред 24ч</span>
-          <span class="text-[13px] font-semibold text-[#30d158] font-tabular">+42.8 TON</span>
+          <span class="text-[10px] text-[#8e8e93] block uppercase tracking-wider font-semibold">Порог спреда</span>
+          <span id="currentSpreadBadge" class="text-[13px] font-semibold text-[#30d158] font-tabular">≥ 15%</span>
         </div>
       </div>
 
-      <!-- Native iOS Segmented Control -->
+      <!-- Segmented Control Navigation -->
       <nav class="bg-[#1c1c1e] p-0.5 rounded-[10px] flex text-[13px] font-medium text-[#8e8e93] border border-white/[0.05]">
         <button onclick="switchTab('feed')" id="tab-feed" class="segmented-item active flex-1 py-1.5 text-center rounded-[8px] transition">
           Снайпер
+        </button>
+        <button onclick="switchTab('recent')" id="tab-recent" class="segmented-item flex-1 py-1.5 text-center rounded-[8px] transition">
+          Свежие
         </button>
         <button onclick="switchTab('gaps')" id="tab-gaps" class="segmented-item flex-1 py-1.5 text-center rounded-[8px] transition">
           Стакан
@@ -76,279 +85,319 @@
         <button onclick="switchTab('filters')" id="tab-filters" class="segmented-item flex-1 py-1.5 text-center rounded-[8px] transition">
           Фильтры
         </button>
-        <button onclick="switchTab('pnl')" id="tab-pnl" class="segmented-item flex-1 py-1.5 text-center rounded-[8px] transition">
-          Портфель
-        </button>
       </nav>
     </header>
 
-    <!-- Main Body Area -->
-    <main class="flex-1 px-4 py-3 pb-28 space-y-5 overflow-y-auto">
+    <!-- Main Scrollable Area -->
+    <main class="flex-1 px-4 py-3 pb-28 space-y-4 overflow-y-auto">
 
-      <!-- View: Feed / Live Sniper -->
+      <!-- View: Sniper Hot Feed -->
       <div id="view-feed" class="space-y-4">
-        
-        <!-- Grouped List 1: High Spread Hits -->
-        <div>
-          <div class="text-[12px] font-semibold text-[#8e8e93] uppercase tracking-wider px-1 mb-2">
-            Выгодные лоты (Спред &gt; 20%)
-          </div>
+        <div class="flex justify-between items-center px-1">
+          <span class="text-[12px] font-semibold text-[#8e8e93] uppercase tracking-wider">
+            Найденные спреды (Live)
+          </span>
+          <span id="hotCountLabel" class="text-[12px] font-tabular text-[#8e8e93]">0 лотов</span>
+        </div>
 
-          <div class="bg-[#1c1c1e] rounded-2xl overflow-hidden divide-y divide-white/[0.07] border border-white/[0.06]">
-            
-            <!-- Gift Item 1: Lunar Snake #42 -->
-            <div onclick="selectLot(this, 'Lunar Snake #42', '8.5 TON', '12.0 TON', '+28.5%')" class="lot-row flex items-center justify-between p-3.5 hover:bg-white/[0.02] active:bg-white/[0.05] cursor-pointer transition">
-              <div class="flex items-center gap-3">
-                <!-- Real Telegram Gift Visual Container -->
-                <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-purple-900/60 to-purple-950 border border-purple-500/20 flex items-center justify-center relative flex-shrink-0">
-                  <svg class="w-6 h-6 text-purple-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 14h-2v-2h2v2zm0-4h-2V7h2v5z" opacity="0.2"/>
-                    <path d="M7 11c1.5-2 3.5-3 5-3s3.5 1 5 3c-1.5 3-3.5 5-5 5s-3.5-2-5-5z"/>
-                  </svg>
-                  <span class="absolute -bottom-1 -right-1 text-[9px] bg-[#2c1b4d] text-purple-300 px-1 py-0.2 rounded font-semibold border border-purple-500/30">Albino</span>
-                </div>
-                <div>
-                  <div class="flex items-center gap-1.5">
-                    <span class="text-[15px] font-semibold text-white">Lunar Snake</span>
-                    <span class="text-[13px] text-[#8e8e93] font-tabular">#42</span>
-                  </div>
-                  <div class="text-[13px] text-[#8e8e93] mt-0.5">
-                    Флор: <span class="font-tabular text-zinc-300">12.0 TON</span> • Ликвидность: 14/ч
-                  </div>
-                </div>
-              </div>
-
-              <!-- Price & Net Profit -->
-              <div class="text-right flex-shrink-0">
-                <div class="text-[15px] font-semibold text-white font-tabular">8.5 TON</div>
-                <div class="text-[13px] font-semibold text-[#30d158] font-tabular">+28.5%</div>
-              </div>
-            </div>
-
-            <!-- Gift Item 2: Spicy Chili #777 -->
-            <div onclick="selectLot(this, 'Spicy Chili #777', '14.0 TON', '20.5 TON', '+38.0%')" class="lot-row flex items-center justify-between p-3.5 hover:bg-white/[0.02] active:bg-white/[0.05] cursor-pointer transition">
-              <div class="flex items-center gap-3">
-                <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-red-900/60 to-orange-950 border border-orange-500/20 flex items-center justify-center relative flex-shrink-0">
-                  <svg class="w-6 h-6 text-orange-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                    <path d="M12 2a5 5 0 0 1 5 5c0 4-5 10-5 10S7 11 7 7a5 5 0 0 1 5-5z"/>
-                  </svg>
-                  <span class="absolute -bottom-1 -right-1 text-[9px] bg-amber-950 text-amber-300 px-1 py-0.2 rounded font-semibold border border-amber-500/30">#777</span>
-                </div>
-                <div>
-                  <div class="flex items-center gap-1.5">
-                    <span class="text-[15px] font-semibold text-white">Spicy Chili</span>
-                    <span class="text-[13px] text-amber-400 font-semibold font-tabular">#777</span>
-                  </div>
-                  <div class="text-[13px] text-[#8e8e93] mt-0.5">
-                    Оценка редких: <span class="font-tabular text-zinc-300">20.5 TON</span>
-                  </div>
-                </div>
-              </div>
-
-              <div class="text-right flex-shrink-0">
-                <div class="text-[15px] font-semibold text-white font-tabular">14.0 TON</div>
-                <div class="text-[13px] font-semibold text-[#30d158] font-tabular">+38.0%</div>
-              </div>
-            </div>
-
-            <!-- Gift Item 3: Black Heart #1208 -->
-            <div onclick="selectLot(this, 'Black Heart #1208', '6.2 TON', '8.0 TON', '+22.5%')" class="lot-row flex items-center justify-between p-3.5 hover:bg-white/[0.02] active:bg-white/[0.05] cursor-pointer transition">
-              <div class="flex items-center gap-3">
-                <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-zinc-800 to-zinc-900 border border-zinc-700/50 flex items-center justify-center relative flex-shrink-0">
-                  <svg class="w-6 h-6 text-zinc-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-                  </svg>
-                </div>
-                <div>
-                  <div class="flex items-center gap-1.5">
-                    <span class="text-[15px] font-semibold text-white">Black Heart</span>
-                    <span class="text-[13px] text-[#8e8e93] font-tabular">#1208</span>
-                  </div>
-                  <div class="text-[13px] text-[#8e8e93] mt-0.5">
-                    Флор: <span class="font-tabular text-zinc-300">8.0 TON</span> • Шаг стакана 42%
-                  </div>
-                </div>
-              </div>
-
-              <div class="text-right flex-shrink-0">
-                <div class="text-[15px] font-semibold text-white font-tabular">6.2 TON</div>
-                <div class="text-[13px] font-semibold text-[#30d158] font-tabular">+22.5%</div>
-              </div>
-            </div>
-
+        <div id="hotListContainer" class="bg-[#1c1c1e] rounded-2xl overflow-hidden divide-y divide-white/[0.07] border border-white/[0.06]">
+          <!-- Skeletons while loading -->
+          <div class="p-6 text-center text-zinc-500 text-sm">
+            <div class="inline-block animate-spin rounded-full h-5 w-5 border-2 border-[#2481cc] border-t-transparent mb-2"></div>
+            <p>Подключение к потоку маркета...</p>
           </div>
         </div>
 
-        <!-- Section: Metric Banner -->
-        <div class="px-1 text-[13px] text-[#8e8e93] leading-relaxed">
-          Комиссия маркетплейса 5% уже вычтена из процента чистой прибыли.
+        <div class="px-1 text-[12px] text-[#8e8e93] leading-relaxed">
+          Комиссия маркетплейса 5% уже вычтена из процента чистой прибыли. Нажмите на лот для перехода к покупке.
         </div>
-
       </div>
 
-      <!-- View: Gaps (Floor Step) -->
+      <!-- View: Recent Live Stream -->
+      <div id="view-recent" class="hidden space-y-4">
+        <div class="flex justify-between items-center px-1">
+          <span class="text-[12px] font-semibold text-[#8e8e93] uppercase tracking-wider">
+            Все свежие публикации
+          </span>
+          <span id="recentCountLabel" class="text-[12px] font-tabular text-[#8e8e93]">0 лотов</span>
+        </div>
+
+        <div id="recentListContainer" class="bg-[#1c1c1e] rounded-2xl overflow-hidden divide-y divide-white/[0.07] border border-white/[0.06]">
+          <div class="p-6 text-center text-zinc-500 text-sm">Загрузка ленты...</div>
+        </div>
+      </div>
+
+      <!-- View: Order Book Gaps -->
       <div id="view-gaps" class="hidden space-y-4">
-        <div>
-          <div class="text-[12px] font-semibold text-[#8e8e93] uppercase tracking-wider px-1 mb-2">
-            Разрывы между 1-м и 2-м лотом
-          </div>
+        <div class="text-[12px] font-semibold text-[#8e8e93] uppercase tracking-wider px-1">
+          Разрывы цен в стакане (1-й vs 2-й лот)
+        </div>
 
-          <div class="bg-[#1c1c1e] rounded-2xl overflow-hidden divide-y divide-white/[0.07] border border-white/[0.06]">
-            
-            <div class="p-3.5 flex justify-between items-center">
-              <div>
-                <div class="text-[15px] font-semibold text-white">Lunar Snake</div>
-                <div class="text-[13px] text-[#8e8e93] font-tabular">1-й лот: 8.5 TON • 2-й лот: 12.0 TON</div>
-              </div>
-              <div class="text-right">
-                <span class="text-[14px] font-semibold text-[#30d158] font-tabular">+41.2%</span>
-                <span class="text-[11px] text-[#8e8e93] block">Разрыв цены</span>
-              </div>
-            </div>
+        <div id="gapsContainer" class="bg-[#1c1c1e] rounded-2xl overflow-hidden divide-y divide-white/[0.07] border border-white/[0.06]">
+          <div class="p-6 text-center text-zinc-500 text-sm">Расчет глубины стакана...</div>
+        </div>
 
-            <div class="p-3.5 flex justify-between items-center">
-              <div>
-                <div class="text-[15px] font-semibold text-white">Black Heart</div>
-                <div class="text-[13px] text-[#8e8e93] font-tabular">1-й лот: 6.2 TON • 2-й лот: 8.0 TON</div>
-              </div>
-              <div class="text-right">
-                <span class="text-[14px] font-semibold text-[#30d158] font-tabular">+29.0%</span>
-                <span class="text-[11px] text-[#8e8e93] block">Разрыв цены</span>
-              </div>
-            </div>
-
-            <div class="p-3.5 flex justify-between items-center">
-              <div>
-                <div class="text-[15px] font-semibold text-white">Cake Party</div>
-                <div class="text-[13px] text-[#8e8e93] font-tabular">1-й лот: 15.0 TON • 2-й лот: 17.5 TON</div>
-              </div>
-              <div class="text-right">
-                <span class="text-[14px] font-semibold text-zinc-400 font-tabular">+16.6%</span>
-                <span class="text-[11px] text-[#8e8e93] block">Разрыв цены</span>
-              </div>
-            </div>
-
-          </div>
+        <div class="px-1 text-[12px] text-[#8e8e93] leading-relaxed">
+          💡 <b>Флип по стакану:</b> выкуп 1-го лота позволяет сразу выставить его по цене чуть ниже 2-го с гарантированным профитом.
         </div>
       </div>
 
-      <!-- View: iOS Settings Style Filters -->
+      <!-- View: Settings & Filters -->
       <div id="view-filters" class="hidden space-y-4">
-        <div>
-          <div class="text-[12px] font-semibold text-[#8e8e93] uppercase tracking-wider px-1 mb-2">
-            Параметры снайпинга
+        <div class="text-[12px] font-semibold text-[#8e8e93] uppercase tracking-wider px-1">
+          Параметры снайпера
+        </div>
+
+        <div class="bg-[#1c1c1e] rounded-2xl overflow-hidden divide-y divide-white/[0.07] border border-white/[0.06]">
+          <div class="p-3.5 flex items-center justify-between">
+            <div>
+              <div class="text-[15px] font-medium text-white">Мин. чистый спред</div>
+              <div class="text-[13px] text-[#8e8e93]">Порог для отправки алерта</div>
+            </div>
+            <span id="filterSpreadDisplay" class="text-[15px] font-semibold text-[#2481cc] font-tabular">15%</span>
           </div>
 
-          <div class="bg-[#1c1c1e] rounded-2xl overflow-hidden divide-y divide-white/[0.07] border border-white/[0.06]">
-            
-            <div class="p-3.5 flex items-center justify-between">
-              <div>
-                <div class="text-[15px] font-medium text-white">Мин. чистый спред</div>
-                <div class="text-[13px] text-[#8e8e93]">Искать только с запасом прибыли</div>
-              </div>
-              <span class="text-[15px] font-semibold text-[#2481cc] font-tabular">20%</span>
+          <div class="p-3.5">
+            <input type="range" min="5" max="40" step="5" value="15" id="spreadSlider" class="w-full accent-[#2481cc] cursor-pointer" oninput="onSpreadChange(this.value)">
+            <div class="flex justify-between text-[11px] text-[#8e8e93] font-tabular mt-1">
+              <span>5% (часто)</span>
+              <span>15%</span>
+              <span>40% (редко)</span>
             </div>
+          </div>
 
-            <div class="p-3.5 flex items-center justify-between">
-              <div>
-                <div class="text-[15px] font-medium text-white">Исключать неликвид</div>
-                <div class="text-[13px] text-[#8e8e93]">Менее 2 сделок за 24 часа</div>
-              </div>
-              <input type="checkbox" checked class="w-5 h-5 accent-[#2481cc] rounded cursor-pointer">
+          <div class="p-3.5 flex items-center justify-between">
+            <div>
+              <div class="text-[15px] font-medium text-white">Комиссия платформы</div>
+              <div class="text-[13px] text-[#8e8e93]">Фиксированная комиссия MRKT</div>
             </div>
-
-            <div class="p-3.5 flex items-center justify-between">
-              <div>
-                <div class="text-[15px] font-medium text-white">🔔 Уведомления в Telegram</div>
-                <div class="text-[13px] text-[#8e8e93]">Бот присылает сообщение в личку</div>
-              </div>
-              <input type="checkbox" checked class="w-5 h-5 accent-[#2481cc] rounded cursor-pointer">
-            </div>
-
+            <span class="text-[14px] font-semibold text-zinc-400 font-tabular">5.0%</span>
           </div>
         </div>
-      </div>
 
-      <!-- View: PnL Portfolio -->
-      <div id="view-pnl" class="hidden space-y-4">
-        <div>
-          <div class="text-[12px] font-semibold text-[#8e8e93] uppercase tracking-wider px-1 mb-2">
-            Финансовый результат
-          </div>
-
-          <div class="bg-[#1c1c1e] rounded-2xl p-4 border border-white/[0.06] space-y-3">
-            <div class="flex justify-between items-start">
-              <div>
-                <span class="text-[13px] text-[#8e8e93]">Реализованная прибыль:</span>
-                <div class="text-[28px] font-bold text-[#30d158] font-tabular mt-0.5">+42.85 TON</div>
-                <div class="text-[13px] text-[#8e8e93] font-tabular">≈ $214.25 USD</div>
-              </div>
-              <div class="text-right">
-                <span class="text-[13px] text-[#8e8e93]">Винрейт:</span>
-                <div class="text-[18px] font-semibold text-white font-tabular mt-0.5">85.7%</div>
-                <div class="text-[12px] text-[#8e8e93]">12 из 14 флипов</div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <button onclick="saveFilterSettings()" class="w-full h-[46px] bg-[#1c1c1e] hover:bg-[#2c2c2e] active:scale-[0.98] border border-white/[0.08] text-white font-semibold text-[15px] rounded-xl transition">
+          Применить настройки
+        </button>
       </div>
 
     </main>
 
-    <!-- Bottom Native MainButton Area (Apple HIG & Telegram WebApp Standard) -->
+    <!-- Bottom Native MainButton Area -->
     <footer class="fixed max-w-[430px] bottom-0 left-0 right-0 mx-auto z-40 bg-black/90 backdrop-blur-xl border-t border-white/[0.06] p-4 pb-6">
-      <button id="mainBtn" onclick="openSelectedLot()" class="w-full h-[50px] bg-[#2481cc] hover:bg-[#1f73b6] active:scale-[0.98] text-white font-semibold text-[16px] rounded-xl flex items-center justify-center gap-2 transition shadow-sm">
-        <span id="mainBtnLabel">Выбрать лот для покупки</span>
+      <button id="mainBtn" onclick="buySelectedLot()" class="w-full h-[50px] bg-[#2481cc] hover:bg-[#1f73b6] active:scale-[0.98] text-white font-semibold text-[16px] rounded-xl flex items-center justify-center gap-2 transition shadow-sm">
+        <span id="mainBtnLabel">Выберите лот для выкупа</span>
       </button>
     </footer>
 
     <!-- Toast Notification -->
     <div id="tgToast" class="fixed top-14 left-1/2 -translate-x-1/2 bg-[#1c1c1e] border border-white/[0.1] text-white text-[13px] px-4 py-2 rounded-full opacity-0 pointer-events-none transition-opacity duration-200 z-50 shadow-xl">
-      Лот открыт
+      Уведомление
     </div>
 
   </div>
 
   <script>
-    let currentSelectedLot = null;
+    // Инициализация Telegram WebApp API
+    const tg = window.Telegram?.WebApp;
+    if (tg) {
+      tg.ready();
+      tg.expand();
+      tg.headerColor = '#000000';
+      tg.backgroundColor = '#000000';
+    }
+
+    let selectedLot = null;
+    let currentMinSpread = 15;
 
     function switchTab(tab) {
       document.querySelectorAll('.segmented-item').forEach(el => el.classList.remove('active'));
-      document.getElementById('tab-' + tab).classList.add('active');
+      const activeBtn = document.getElementById('tab-' + tab);
+      if (activeBtn) activeBtn.classList.add('active');
 
       document.querySelectorAll('main > div').forEach(v => v.classList.add('hidden'));
-      document.getElementById('view-' + tab).classList.remove('hidden');
+      const activeView = document.getElementById('view-' + tab);
+      if (activeView) activeView.classList.remove('hidden');
+
+      if (tab === 'gaps') loadGaps();
     }
 
-    function selectLot(rowEl, title, buyPrice, floorPrice, spread) {
-      document.querySelectorAll('.lot-row').forEach(r => r.classList.remove('bg-white/[0.06]'));
-      rowEl.classList.add('bg-white/[0.06]');
+    function renderLotRow(lot, isHot = false) {
+      const numStr = lot.number ? `#${lot.number}` : '';
+      const imgTag = lot.image 
+        ? `<img src="${lot.image}" class="w-8 h-8 object-contain" alt="" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" /><div class="hidden w-8 h-8 items-center justify-center text-lg">🎁</div>`
+        : `<div class="w-8 h-8 flex items-center justify-center text-lg">🎁</div>`;
 
-      currentSelectedLot = { title, buyPrice };
+      const spreadClass = lot.roi >= 20 ? 'text-[#30d158]' : (lot.roi > 0 ? 'text-emerald-400' : 'text-zinc-400');
+      const spreadSign = lot.roi > 0 ? '+' : '';
+
+      return `
+        <div onclick="selectLotRow(this, '${lot.id}', '${lot.title}', '${numStr}', ${lot.buyPrice}, '${lot.deepLink}', ${lot.roi})" 
+             class="lot-item flex items-center justify-between p-3.5 hover:bg-white/[0.02] active:bg-white/[0.05] cursor-pointer transition"
+             data-id="${lot.id}">
+          <div class="flex items-center gap-3 min-w-0">
+            <div class="w-11 h-11 rounded-xl bg-zinc-900 border border-white/[0.08] flex items-center justify-center flex-shrink-0 overflow-hidden">
+              ${imgTag}
+            </div>
+            <div class="min-w-0">
+              <div class="flex items-center gap-1.5 truncate">
+                <span class="text-[15px] font-semibold text-white truncate">${lot.title}</span>
+                <span class="text-[13px] text-[#8e8e93] font-tabular">${numStr}</span>
+              </div>
+              <div class="text-[13px] text-[#8e8e93] mt-0.5 truncate">
+                ${lot.model ? `${lot.model} • ` : ''}Флор: <span class="font-tabular text-zinc-300">${lot.floorPrice} TON</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="text-right flex-shrink-0 pl-2">
+            <div class="text-[15px] font-semibold text-white font-tabular">${lot.buyPrice} TON</div>
+            <div class="text-[13px] font-semibold ${spreadClass} font-tabular">${spreadSign}${lot.roi}%</div>
+          </div>
+        </div>
+      `;
+    }
+
+    function selectLotRow(el, id, title, numStr, price, deepLink, roi) {
+      document.querySelectorAll('.lot-item').forEach(r => r.classList.remove('bg-white/[0.06]'));
+      el.classList.add('bg-white/[0.06]');
+
+      selectedLot = { id, title, numStr, price, deepLink, roi };
+      
       const btn = document.getElementById('mainBtn');
       const btnLabel = document.getElementById('mainBtnLabel');
       
-      btnLabel.innerText = `Купить ${title} на MRKT • ${buyPrice}`;
-      btn.classList.add('bg-[#30d158]');
+      btnLabel.innerText = `Купить ${title} ${numStr} • ${price} TON`;
       btn.classList.remove('bg-[#2481cc]');
+      btn.classList.add('bg-[#30d158]');
     }
 
-    function openSelectedLot() {
-      if(!currentSelectedLot) {
-        showToast('Нажмите на любой лот из списка выше');
+    function buySelectedLot() {
+      if (!selectedLot || !selectedLot.deepLink) {
+        showToast('Нажмите на нужный лот в списке');
         return;
       }
-      showToast(`Переход к покупке ${currentSelectedLot.title}...`);
+
+      showToast(`Открываем ${selectedLot.title} на MRKT...`);
+      
+      // Нативный переход в Telegram на конкретный лот
+      if (tg && typeof tg.openTelegramLink === 'function') {
+        tg.openTelegramLink(selectedLot.deepLink);
+      } else {
+        window.open(selectedLot.deepLink, '_blank');
+      }
+    }
+
+    async function loadLots() {
+      try {
+        const res = await fetch('/api/lots');
+        if (!res.ok) return;
+        const data = await res.json();
+
+        // 1. Горячие лоты (со спредом)
+        const hotContainer = document.getElementById('hotListContainer');
+        const hotLots = data.hot || [];
+        document.getElementById('hotCountLabel').innerText = `${hotLots.length} лотов`;
+
+        if (hotLots.length === 0) {
+          hotContainer.innerHTML = `
+            <div class="p-6 text-center text-zinc-400 text-[13px]">
+              <span class="text-2xl block mb-2">⚡</span>
+              Поиск выгодных лотов...<br>
+              <span class="text-[#8e8e93] text-[12px]">Как только появится спред ≥ ${currentMinSpread}%, он появится здесь</span>
+            </div>
+          `;
+        } else {
+          hotContainer.innerHTML = hotLots.map(lot => renderLotRow(lot, true)).join('');
+        }
+
+        // 2. Все свежие лоты
+        const recentContainer = document.getElementById('recentListContainer');
+        const recentLots = data.recent || [];
+        document.getElementById('recentCountLabel').innerText = `${recentLots.length} лотов`;
+
+        if (recentLots.length > 0) {
+          recentContainer.innerHTML = recentLots.map(lot => renderLotRow(lot, false)).join('');
+        }
+      } catch (err) {
+        console.error('Ошибка загрузки лотов:', err);
+      }
+    }
+
+    async function loadGaps() {
+      try {
+        const res = await fetch('/api/gaps');
+        if (!res.ok) return;
+        const gaps = await res.json();
+        const container = document.getElementById('gapsContainer');
+
+        if (!gaps || gaps.length === 0) {
+          container.innerHTML = `<div class="p-5 text-center text-zinc-500 text-xs">Данные стакана обновляются...</div>`;
+          return;
+        }
+
+        container.innerHTML = gaps.map(g => `
+          <div class="p-3.5 flex justify-between items-center">
+            <div>
+              <div class="text-[15px] font-semibold text-white">${g.title}</div>
+              <div class="text-[13px] text-[#8e8e93] font-tabular">1-й лот: ${g.lot1} TON • 2-й: ${g.lot2} TON</div>
+            </div>
+            <div class="text-right">
+              <span class="text-[14px] font-semibold text-[#30d158] font-tabular">+${g.gap}%</span>
+              <span class="text-[11px] text-[#8e8e93] block">Разрыв цены</span>
+            </div>
+          </div>
+        `).join('');
+      } catch (err) {
+        console.error('Ошибка загрузки стакана:', err);
+      }
+    }
+
+    async function loadStatus() {
+      try {
+        const res = await fetch('/api/status');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.minSpread) {
+          currentMinSpread = data.minSpread;
+          document.getElementById('currentSpreadBadge').innerText = `≥ ${data.minSpread}%`;
+          document.getElementById('filterSpreadDisplay').innerText = `${data.minSpread}%`;
+          document.getElementById('spreadSlider').value = data.minSpread;
+        }
+      } catch (err) {}
+    }
+
+    function onSpreadChange(val) {
+      document.getElementById('filterSpreadDisplay').innerText = `${val}%`;
+    }
+
+    async function saveFilterSettings() {
+      const val = parseFloat(document.getElementById('spreadSlider').value);
+      try {
+        await fetch('/api/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ minSpread: val })
+        });
+        currentMinSpread = val;
+        document.getElementById('currentSpreadBadge').innerText = `≥ ${val}%`;
+        showToast(`Порог сохранен: ${val}%`);
+        setTimeout(() => switchTab('feed'), 500);
+      } catch (e) {
+        showToast('Ошибка сохранения');
+      }
     }
 
     function showToast(text) {
       const toast = document.getElementById('tgToast');
       toast.innerText = text;
       toast.classList.remove('opacity-0');
-      setTimeout(() => {
-        toast.classList.add('opacity-0');
-      }, 2000);
+      setTimeout(() => toast.classList.add('opacity-0'), 2000);
     }
+
+    // Первоначальная загрузка и интервал автообновления
+    loadStatus();
+    loadLots();
+    setInterval(loadLots, 2500);
   </script>
 </body>
 </html>
