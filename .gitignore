@@ -1,0 +1,19 @@
+# Секреты и конфиденциальные данные
+.env
+*.env
+mrkt_session.*
+
+# Python кэш
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+
+# Виртуальные окружения
+venv/
+.venv/
+env/
+
+# Логи и временные файлы
+*.log
+scratch/
